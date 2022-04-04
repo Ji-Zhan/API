@@ -1,0 +1,166 @@
+import sqlite3
+from flask import Flask, request
+from flask_restx import Api
+import requests
+import json
+from datetime import datetime
+
+
+app = Flask(__name__)
+api = Api(app)
+
+
+#question 1
+@app.route('/actors', methods=['POST'])
+def add_actor():
+    #Connect to the database (a table named actors has been created/sqlite code: CREATE TABLE actors(id INTEGER PRIMARY KEY AUTOINCREMENT, data text NOT NULL);)
+    con = sqlite3.connect('z5347571.db')
+    args = request.args
+    ##print(args.get("name"))
+    url = "https://api.tvmaze.com/search/people"
+    Param = {"q": args.get("name")}
+    response = requests.get(url, Param)
+    actor_name = args.get('name')
+    actor_data = json.dumps(response.json())
+    cur = con.cursor()
+
+    # Insert a row of data
+    cur.execute("INSERT INTO actors(name, data) VALUES (?,?)",(actor_name, actor_data))
+    print(response.json())
+    con.commit()
+    Lastrowid = cur.lastrowid
+    con.close()
+    now = datetime.now()
+    current_time = now.strftime("%Y-%m-%d-%H:%M:%S")
+    result = {
+        "id": Lastrowid,
+        "last-update": current_time,
+        "_links": {
+            "self": {
+                "href": "http://127.0.0.1:5000/actors/%s"%Lastrowid
+            }
+        }
+    }
+    return result
+
+#question 2
+@app.route('/actors/<id>', methods=['GET'])
+def get_actor(id):
+    con = sqlite3.connect('z5347571.db')
+    cur = con.cursor()
+    #Select actors' id from table actors
+    # console.log (id)
+
+    #print(type(id))
+    ID = int(id)
+    cur.execute("SELECT * FROM actors WHERE id = '%s'" % ID)
+
+    # Obtain selected data
+    Fetchall = cur.fetchall()
+    # print (Fetchall)
+    data = Fetchall[0]
+
+    #change the selected string to a dictionary
+    data_2 = json.loads(data[2])
+
+    data_3=data_2[0]
+    now2 = datetime.now()
+    current_time2 = now2.strftime("%Y-%m-%d-%H:%M:%S")
+    con.commit()
+    # Values = cur.fetchall()
+    # ID = row.id
+    #print(data_3)
+    Birthday = data_3["person"]["birthday"]
+    Country = data_3["person"]["country"]["name"]
+    Name = data_3["person"]["name"]
+    Deathday = data_3["person"]["deathday"]
+    con.close()
+    result2 = {
+        "id": ID,
+        "last-update": current_time2,
+        "name": Name,
+        "country": Country,
+        "birthday": Birthday,
+        "deathday": Deathday,
+        "shows": [
+            "show 1",
+            "show 2",
+            "show 3"
+        ],
+        "_links": {
+            "self": {
+                "href": "http://127.0.0.1:5000/actors/%s" % ID
+            },
+            "previous": {
+                "href": "http://127.0.0.1:5000/actors/%s" % str(ID-1)
+            },
+            "next": {
+                "href": "http://127.0.0.1:5000/actors/%s" % str(ID+1)
+            }
+        }
+    }
+    return result2
+
+#question 3
+@app.route('/actors/<id>', methods=['DELETE'])
+def delete_actors (id):
+    con = sqlite3.connect('z5347571.db')
+    cur = con.cursor()
+    ID = int(id)
+    cur.execute("DELETE FROM actors WHERE id = '%s'" % ID)
+
+    con.commit()
+    con.close()
+    result3 = {
+        "message": "The actor with id %s was removed from the database!"%id,
+        "id": "%s" %id
+    }
+    return result3
+
+
+#question4
+@app.route('/actors/<id>', methods=['PATCH'])
+def patch_actors (id):
+    ID = int (id)
+    body = request.json
+    body_name = body["name"]
+    body__country=body["country"]
+    body_birthday=body["birthday"]
+    body_deathday=body["deathday"]
+    con = sqlite3.connect('z5347571.db')  
+    cur = con.cursor()   
+    cur.execute("SELECT * FROM actors WHERE id = '%s'" % ID)
+    Fetchall = cur.fetchall()
+    data = Fetchall[0]
+    data_2 = json.loads(data[2])   
+    data_3 = data_2[0]
+    data_3["person"]["birthday"] = body_birthday
+    data_3["person"]["country"]["name"] = body__country
+    data_3["person"]["name"] = body_name
+    data_3["person"]["deathday"] = body_deathday
+    data_4 = json.dumps([data_3])
+    print(data_4)
+    cur.execute('''UPDATE actors SET data = ? WHERE id = ?''' , (data_4, ID))
+    con.commit()
+    con.close()
+    now4 = datetime.now()
+    current_time4 = now4.strftime("%Y-%m-%d-%H:%M:%S")
+    result4 = {
+         "id": ID,
+         "last-update": current_time4,
+         "_links": {
+             "self": {
+                 "href": "http://127.0.0.1:5000/actors/%s" %ID
+             }
+         }
+     }
+    return result4
+
+
+#question5
+@app.route('/actors?order=<CSV-FORMATED-VALUE> & page=1 & size=10 & filter=<CSV-FORMATED-VALUE>', methods=['GET'])
+def sort_actors(id):
+   ID = int(id)
+   
+if __name__ == '__main__':
+    app.run(debug=True)
